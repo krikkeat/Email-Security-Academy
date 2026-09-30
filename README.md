@@ -5,13 +5,15 @@
 ## ✨ Features
 
 - **8 บทเรียน** ครอบคลุมทั้ง lifecycle การ implement:1. 🏗️ เลือกสถาปัตยกรรม (SEG vs API vs Hybrid) — *interactive tabs*
-2. 🌐 Mail Flow & DNS Topology — *flow diagram + accordion*
-3. 📍 ตั้งค่า SPF (พร้อม syntax เต็ม + กฎ 10 lookups)
-4. ✍️ ตั้งค่า DKIM (selector, 2048-bit, rotation)
-5. ⚖️ Rollout DMARC 4 ระยะ (none → quarantine → reject)
-6. 🛡️ Config Gateway / Filtering — *checklist ติ๊กได้*
-7. 🔐 Encryption & DLP — *tabs TLS/S-MIME/PGP*
-8. ✅ Test, Monitor & Operate (dig commands, runbook)
+
+1. 🌐 Mail Flow & DNS Topology — *flow diagram + accordion*
+2. 📍 ตั้งค่า SPF (พร้อม syntax เต็ม + กฎ 10 lookups)
+3. ✍️ ตั้งค่า DKIM (selector, 2048-bit, rotation)
+4. ⚖️ Rollout DMARC 4 ระยะ (none → quarantine → reject)
+5. 🛡️ Config Gateway / Filtering — *checklist ติ๊กได้*
+6. 🔐 Encryption & DLP — *tabs TLS/S-MIME/PGP*
+7. ✅ Test, Monitor & Operate (dig commands, runbook)
+
 - **🎓 Quiz ท้ายบท** 5 ข้อ เฉลยทันทีพร้อมคำอธิบาย
 - **Copy-to-clipboard** ทุก code block (DNS records เขียนเต็มไม่ย่อ)
 - **Progress bar** + sidebar navigation + keyboard-friendly
