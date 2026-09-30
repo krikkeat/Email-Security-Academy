@@ -145,6 +145,24 @@ const lessons = [
     ${callout("info","💡 หลักการเลือก","เลือกตาม \"เส้นทาง bypass ที่อันตรายที่สุด\" ขององค์กร — ถ้าห่วงภัยภายนอกก่อนถึง inbox เน้น SEG; ถ้าห่วง BEC/ATO/internal phishing เน้น API; องค์กรใหญ่มักใช้ Hybrid เพื่อครอบคลุมทั้งสองมุม")}
     ${callout("warn","⚠️ SEG เป็น chokepoint","ถ้า gateway ล่ม อีเมลทั้งองค์กรค้าง — ต้องออกแบบ HA/failover, กำหนด MX สำรอง (secondary MX) และมี queue buffer เสมอ")}
     ${callout("ok","✅ แนวโน้มปี 2026","API-based (ICES) ได้รับความนิยมมากขึ้นเพราะ deploy เร็ว (นาที) และเห็น internal email ที่ SEG มองไม่เห็น — แต่ SEG ยังแข็งแรงเรื่องบล็อก known threats ก่อนถึง inbox")}
+
+    ${deep("เจาะลึก: API-based (ICES) ทำงานอย่างไร", "ICES (Integrated Cloud Email Security) เชื่อมกับ M365/Google ผ่าน API (เช่น Microsoft Graph) โดยไม่แตะ mail flow — เมื่ออีเมลเข้ากล่องแล้ว ICES จะอ่านผ่าน API, วิเคราะห์ด้วย ML/behavioral analysis, และถ้าพบว่าเป็นภัยก็ <b>claw-back</b> (ดึงออกจากกล่อง) ได้ ข้อดีคือเห็น <b>internal email</b> และ <b>east-west traffic</b> (อีเมลระหว่างพนักงาน) ที่ SEG มองไม่เห็นเลย — สำคัญมากต่อการจับ account takeover ที่ผู้โจมตีใช้บัญชีภายในส่งต่อ")}
+
+    ${deep("Mail routing: MX-based vs Journaling vs API", defs([
+      ["MX","อีเมลวิ่งผ่าน gateway ก่อน (inline/SEG) — บล็อกได้ก่อนถึงกล่อง แต่เป็น chokepoint"],
+      ["Journal","ก็อปอีเมลส่งไปวิเคราะห์แบบขนาน — ไม่บล็อก real-time เหมาะกับ compliance/archiving"],
+      ["API","ต่อ mailbox โดยตรงหลังส่ง — deploy เร็ว เห็น internal แต่เป็น post-delivery"]
+    ]))}
+
+    ${scenario("บริษัทใช้ M365 อยู่แล้ว อยากเพิ่มการป้องกัน", "ทางเลือกที่นิยม: เปิด <b>Microsoft Defender for Office 365</b> (native) เป็นชั้นพื้นฐาน + เสริม <b>ICES</b> ผ่าน API เพื่อจับ BEC/phishing ขั้นสูงที่ native มองข้าม — ได้ defense-in-depth โดยไม่ต้องแก้ MX และ deploy ได้ในไม่กี่นาที")}
+
+    ${keypoints([
+      "<b>SEG</b> = pre-delivery, ต้องแก้ MX, บล็อกก่อนถึงกล่อง, เป็น chokepoint",
+      "<b>API/ICES</b> = post-delivery, ไม่แก้ MX, เห็น internal email, deploy เร็ว",
+      "เลือกตาม <b>เส้นทาง bypass ที่อันตรายที่สุด</b> ขององค์กร",
+      "องค์กรใหญ่มัก <b>Hybrid</b> — native/SEG + API เสริมกัน",
+      "SEG ต้องออกแบบ HA + secondary MX เสมอเพราะเป็นจุดล้มเหลว"
+    ])}
     `
   },
   {
@@ -169,6 +187,29 @@ const lessons = [
 
     ${callout("warn","⚠️ MX cutover = ช่วงเสี่ยงที่สุด","เมื่อเปลี่ยน MX ให้ชี้มาที่ SEG ใหม่: <b>(1)</b> ลด TTL เหลือ 300 วินาทีล่วงหน้า 24-48 ชม. เพื่อให้ rollback เร็ว <b>(2)</b> monitor mail flow ทันทีหลัง cutover <b>(3)</b> เตรียม rollback plan ชี้ MX กลับของเดิม")}
     ${callout("ok","✅ Forward + Reverse DNS","ตั้งค่า A record + PTR (reverse DNS) ให้ตรงกันบนทุก sending IP — ผู้รับหลายรายปฏิเสธอีเมลจาก IP ที่ไม่มี PTR ที่ถูกต้อง ถือเป็นพื้นฐานของ reputation")}
+
+    ${deep("เจาะลึก: อ่าน Received header เพื่อสืบเส้นทาง", "ทุก mail server ที่อีเมลผ่านจะเพิ่ม <code>Received:</code> header ต่อกันเป็นชั้นๆ — <b>อ่านจากล่างขึ้นบน</b> (ล่างสุด = ต้นทางแรก, บนสุด = เซิร์ฟเวอร์ล่าสุดที่รับ) ใช้สืบว่าอีเมลมาจากไหนจริง และตรวจว่ามี hop แปลกปลอมไหม เวลาสืบ phishing เริ่มจาก header เสมอ:<br><br>" + code(`<span class=\"cm\"># ตัวอย่าง Received chain (อ่านล่างขึ้นบน)</span>
+<span class=\"ck\">Received:</span> from mx.company.com ...     <span class=\"cm\"># 3. ปลายทาง</span>
+<span class=\"ck\">Received:</span> from relay.provider.net ...  <span class=\"cm\"># 2. relay</span>
+<span class=\"ck\">Received:</span> from unknown [45.14.x.x] ... <span class=\"cm\"># 1. ต้นทางจริง ⚠️</span>`))}
+
+    ${deep("SMTP conversation — เกิดอะไรตอนส่งอีเมล", defs([
+      ["HELO/EHLO","เซิร์ฟเวอร์แนะนำตัว + ประกาศความสามารถ (STARTTLS, SIZE)"],
+      ["MAIL FROM","ระบุ envelope sender (Return-Path) — ใช้ตรวจ SPF"],
+      ["RCPT TO","ระบุผู้รับ — เซิร์ฟเวอร์อาจ reject ที่นี่ถ้าไม่รู้จัก"],
+      ["DATA","ส่งเนื้อหา header + body จริง"],
+      ["STARTTLS","ยกระดับเป็น encrypted channel (opportunistic TLS)"]
+    ]))}
+
+    ${scenario("อีเมลส่งไม่ถึง ปลายทางตีกลับ", "ดู <b>bounce message (NDR)</b> ที่ตีกลับ — จะมี SMTP code บอกสาเหตุ: <code>550</code>=ถูกปฏิเสธ (reputation/policy), <code>421</code>=เซิร์ฟเวอร์ไม่ว่าง/throttle, <code>5.7.1</code>=มักเป็น SPF/DMARC fail หรือถูกมองเป็น spam — ไล่แก้ตาม code ที่ได้")}
+
+    ${keypoints([
+      "ทุก hop เพิ่ม <code>Received:</code> header — อ่านจาก<b>ล่างขึ้นบน</b>เพื่อหาต้นทางจริง",
+      "MX priority เลขน้อย = ลำดับแรก, ตั้ง secondary MX ไว้กัน gateway ล่ม",
+      "PTR (reverse DNS) ต้องตรงกับ A record — พื้นฐานของ IP reputation",
+      "ลด TTL เป็น 300s ก่อน MX cutover 24-48 ชม. เพื่อ rollback เร็ว",
+      "SMTP code ใน bounce บอกสาเหตุส่งไม่ถึง (550/421/5.7.1)"
+    ])}
     `
   },
   {
@@ -196,6 +237,29 @@ dig TXT company.com +short
 <span class="cm"># ดูว่า include unroll เป็นอะไร (นับ lookup)</span>
 dig TXT _spf.google.com +short
 dig TXT spf.protection.outlook.com +short`)}
+
+    ${deep("SPF mechanisms & qualifiers ทั้งหมด", defs([
+      ["ip4: / ip6:","อนุญาต IP/subnet ตรงๆ (ไม่กิน DNS lookup — เร็วสุด)"],
+      ["a / mx","อนุญาตตาม A record หรือ MX ของโดเมน (กิน 1 lookup ต่ออัน)"],
+      ["include:","ดึง SPF ของโดเมนอื่นมารวม (กิน lookup — ตัวการเกิน 10)"],
+      ["all","จับทุกอย่างที่เหลือ — ต้องอยู่ท้ายสุด"],
+      ["+ (pass)","ค่าเริ่มต้น — อนุญาต"],
+      ["- (fail)","ปฏิเสธ (hard fail) — ใช้กับ -all"],
+      ["~ (softfail)","น่าสงสัยแต่รับไว้ — ใช้ตอนทดสอบ"],
+      ["? (neutral)","ไม่ตัดสิน"]
+    ]))}
+
+    ${deep("ทำไม SPF พังตอน forward — และ DKIM ช่วยได้", "เมื่ออีเมลถูก <b>forward</b> (เช่น mailing list, auto-forward) เซิร์ฟเวอร์กลางจะกลายเป็นผู้ส่งใหม่ → IP ไม่ตรงกับ SPF ของโดเมนต้นทาง → <b>SPF fail</b> นี่คือจุดอ่อนของ SPF ที่ DKIM แก้ได้ เพราะ DKIM เซ็นติดไปกับตัวอีเมล ไม่ขึ้นกับ IP ที่ส่ง — เป็นเหตุผลที่ DMARC ยอมให้ผ่านถ้า <b>SPF หรือ DKIM</b> อย่างใดอย่างหนึ่ง aligned")}
+
+    ${scenario("เพิ่ม CRM ใหม่แล้วอีเมลเริ่มเข้า junk", "CRM ส่งอีเมลแทนโดเมนคุณ แต่ IP ของมันไม่อยู่ใน SPF → รับปลายทางเห็น SPF fail → เข้า junk แก้โดยเพิ่ม <code>include:</code> ของ CRM เข้า SPF record <b>แต่ระวังเพดาน 10 lookups</b> — ถ้าใกล้เต็มให้ใช้ SPF flattening แปลงเป็น ip4: แทน")}
+
+    ${keypoints([
+      "มี <b>SPF record เดียว</b>ต่อโดเมนเท่านั้น — 2 อัน = fail ทันที",
+      "เพดาน <b>10 DNS lookups</b> — เกินแล้ว permerror, ทั้ง record เป็นโมฆะ",
+      "<code>ip4:</code> ไม่กิน lookup, <code>include:</code> กิน — ระวังเวลาเพิ่ม tool",
+      "SPF <b>พังตอน forward</b> เพราะ IP เปลี่ยน — DKIM มาช่วยตรงนี้",
+      "เริ่ม <code>~all</code> ตอนทดสอบ → เข้ม <code>-all</code> เมื่อมั่นใจ"
+    ])}
     `
   },
   {
@@ -229,6 +293,28 @@ dig TXT spf.protection.outlook.com +short`)}
     ${callout("warn","⚠️ ใช้ key ขนาด 2048-bit","1024-bit อ่อนเกินไปสำหรับมาตรฐานปี 2026 — สร้าง key 2048-bit และตั้ง selector แยกต่อโดเมน/ต่อผู้ให้บริการที่ส่งแทน")}
     ${callout("ok","✅ Key Rotation","หมุน DKIM key ตามตารางที่กำหนด (เช่นทุก 6 เดือน): สร้าง selector ใหม่ (<code>s2</code>) → publish คู่ขนานกับของเก่า → สลับไปเซ็นด้วย key ใหม่ → รอ 1-2 วันให้อีเมลเก่า verify เสร็จ → ลบ selector เก่า")}
     ${callout("danger","❌ ระวัง key ถูกตัด","public key ยาวเกิน 255 ตัวอักษร DNS จะแบ่งเป็นหลาย string — ต้องต่อกันในเครื่องหมายคำพูดให้ถูกต้อง ไม่งั้น DKIM จะ verify ไม่ผ่าน")}
+
+    ${deep("DKIM-Signature header — อ่านแต่ละ tag", defs([
+      ["v=","เวอร์ชัน (1)"],
+      ["a=","อัลกอริทึมเซ็น เช่น rsa-sha256"],
+      ["d=","โดเมนที่เซ็น (signing domain) — ใช้ตรวจ alignment กับ From"],
+      ["s=","selector — ชี้ว่า public key อยู่ที่ s._domainkey.d"],
+      ["bh=","body hash — แฮชของเนื้อหา"],
+      ["b=","ลายเซ็นดิจิทัลจริง (ของ header ที่ระบุใน h=)"],
+      ["h=","รายชื่อ header ที่ถูกเซ็น (From, Subject, Date...)"]
+    ]))}
+
+    ${deep("Canonicalization: simple vs relaxed", "ก่อนเซ็น DKIM ต้อง normalize ข้อความก่อน (canonicalization) เพราะ relay ระหว่างทางอาจแก้ whitespace เล็กน้อย — <b>simple</b> เข้มงวด (แก้นิดเดียวก็ fail), <b>relaxed</b> ยืดหยุ่นกว่า (ยอม whitespace/case ต่าง) — แนะนำใช้ <code>relaxed/relaxed</code> เพื่อลด false fail จากการ forward")}
+
+    ${scenario("ตั้ง DKIM แล้วแต่ dkim=none ใน header", "แปลว่าอีเมลไม่ถูกเซ็นเลย (ไม่ใช่เซ็นผิด) — เช็ก: (1) เปิด DKIM signing ที่ mail platform แล้วหรือยัง (2) published public key ที่ <code>selector._domainkey</code> ถูกต้องไหม (3) selector ใน DNS ตรงกับที่ platform ใช้เซ็นไหม — ใช้ <code>dig TXT s1._domainkey.company.com</code> ตรวจ")}
+
+    ${keypoints([
+      "DKIM เซ็นด้วย <b>private key</b> (ที่ผู้ส่ง) ตรวจด้วย <b>public key</b> (ใน DNS)",
+      "ยืนยันว่าอีเมล<b>ไม่ถูกแก้ไข</b>ระหว่างทาง + ผูกกับโดเมน (d=)",
+      "ใช้ key <b>2048-bit</b>, selector แยกต่อผู้ส่ง, rotate ทุก ~6 เดือน",
+      "ต่างจาก SPF — DKIM <b>รอด</b>การ forward เพราะเซ็นติดไปกับอีเมล",
+      "ใช้ <code>relaxed/relaxed</code> canonicalization ลด false fail"
+    ])}
     `
   },
   {
@@ -258,6 +344,20 @@ dig TXT spf.protection.outlook.com +short`)}
     ${callout("danger","❌ อย่าเริ่มที่ p=reject ทันที","จะทำให้อีเมลที่ถูกกฎหมาย (marketing platform, CRM, third-party sender) ถูกปฏิเสธหมด — ต้องผ่าน p=none เพื่อเก็บ aggregate report และ inventory ผู้ส่งให้ครบก่อนเสมอ")}
     ${callout("info","💡 อ่าน aggregate report","report มาเป็น XML — ใช้เครื่องมือ (dmarcian, DMARC analyzer) แปลงเป็นตาราง ดูว่าแหล่งใดส่ง fail แล้วไล่แก้ให้ครบก่อนเลื่อนนโยบายให้เข้มขึ้น")}
     ${callout("ok","✅ Alignment คือหัวใจ","DMARC ผ่านเมื่อ SPF <b>หรือ</b> DKIM ผ่าน <b>และ aligned</b> กับโดเมนใน From ที่ผู้ใช้เห็น — <code>adkim=s/aspf=s</code> คือ strict (ตรงเป๊ะ), <code>r</code> คือ relaxed (อนุญาต subdomain)")}
+
+    ${deep("Alignment ทำงานอย่างไร (ตัวอย่างจริง)", "DMARC ตรวจว่าโดเมนใน <code>From:</code> (ที่ผู้ใช้เห็น) ตรงกับโดเมนที่ SPF/DKIM ยืนยันไหม:<br><br>• <b>SPF alignment:</b> From domain ตรงกับ Return-Path (MAIL FROM) domain<br>• <b>DKIM alignment:</b> From domain ตรงกับ <code>d=</code> ใน DKIM-Signature<br><br><b>Relaxed</b> (r) = ยอม subdomain ตรงกัน (mail.company.com ~ company.com) — ค่าเริ่มต้นและใช้ได้จริงส่วนใหญ่<br><b>Strict</b> (s) = ต้องตรงเป๊ะทุกตัวอักษร — เข้มแต่เสี่ยง false fail")}
+
+    ${deep("อ่าน DMARC aggregate report (XML)", "report มาเป็น XML ทุกวันจากผู้รับ (Google, Microsoft ฯลฯ) มี field สำคัญ: <code>source_ip</code> (ใครส่ง), <code>count</code> (กี่ฉบับ), <code>spf</code>/<code>dkim</code> result, <code>disposition</code> (none/quarantine/reject) — ใช้เครื่องมือ (dmarcian, Postmark, Valimail) แปลงเป็น dashboard เพื่อหา: <b>(1)</b> ผู้ส่งจริงที่ยัง fail (ต้องแก้ก่อนเข้ม policy) <b>(2)</b> ผู้แอบอ้างส่งในนามโดเมนเรา (spoofing)")}
+
+    ${scenario("อยากไป p=reject แต่กลัวอีเมล marketing พัง", "ก่อนขยับเป็น reject: เปิด <code>p=none</code> เก็บ report 2-4 สัปดาห์ → list ผู้ส่งทั้งหมด (marketing platform, CRM, invoice system) → ตั้ง SPF/DKIM ให้ทุกตัวผ่าน alignment → ขยับ <code>p=quarantine; pct=25</code> แล้วเพิ่มเป็น 50→100 → ค้าง &lt;1% fail 30 วัน → ค่อย <code>p=reject</code> วิธีนี้ไม่มีอีเมลจริงหลุด")}
+
+    ${keypoints([
+      "DMARC = SPF/DKIM + <b>alignment</b> กับ From + นโยบายเมื่อ fail + reporting",
+      "ผ่านเมื่อ SPF <b>หรือ</b> DKIM ผ่าน <b>และ</b> aligned (อย่างใดอย่างหนึ่งพอ)",
+      "<b>อย่าเริ่ม p=reject</b> — ต้องผ่าน p=none เก็บ report ก่อนเสมอ",
+      "ใช้ <code>rua</code> รับ aggregate report แล้วไล่แก้ผู้ส่งที่ fail",
+      "<code>pct=</code> ใช้ ramp up ค่อยๆ บังคับใช้ 25→50→100"
+    ])}
     `
   },
   {
@@ -286,6 +386,28 @@ dig TXT spf.protection.outlook.com +short`)}
 
     ${callout("warn","⚠️ Tuning เป็นงานต่อเนื่อง","อย่าตั้งเข้มสุดตั้งแต่วันแรก — เริ่มจาก monitor/audit mode แล้วค่อยปรับเข้ม โดยดูจาก false positive rate และ report ของผู้ใช้จริง")}
     ${callout("info","💡 Impersonation protection","ตั้งรายชื่อผู้บริหาร (VIP list) และโดเมนคู่ค้าที่ป้องกันพิเศษ — ระบบจะจับ display-name spoofing และ lookalike domain ที่เป็นสัญญาณ BEC ซึ่ง auth ปกติจับไม่ได้")}
+
+    ${deep("Sandbox / Detonation — ทำงานอย่างไร", "เมื่อมีไฟล์แนบหรือ URL น่าสงสัย ระบบส่งไปเปิดใน <b>VM แยก (sandbox)</b> แล้วดูพฤติกรรมจริง: ไฟล์เรียก process แปลกไหม, ต่อ C2 server ไหม, เข้ารหัสไฟล์ (ransomware) ไหม — ถ้าพบพฤติกรรมร้ายก็บล็อก ข้อจำกัด: ผู้โจมตีใช้ <b>sandbox evasion</b> (หน่วงเวลา, เช็กว่าอยู่ใน VM, ต้องคลิกก่อนทำงาน) — จึงต้องเสริมด้วย CDR และ behavioral AI")}
+
+    ${deep("URL rewriting & Time-of-Click protection", "gateway เขียน URL ในอีเมลใหม่ให้ชี้ผ่าน proxy ของระบบก่อน เช่น <code>https://safelink.vendor/?u=originalURL</code> — เมื่อผู้ใช้คลิก ระบบจะตรวจปลายทาง <b>ณ วินาทีที่คลิก</b> (ไม่ใช่ตอนอีเมลมาถึง) สำคัญมากเพราะผู้โจมตีมักส่งลิงก์ที่ยัง<b>สะอาดตอนส่ง</b> แล้วค่อย weaponize ทีหลัง (delayed weaponization)")}
+
+    ${deep("จับ BEC ที่ auth จับไม่ได้", defs([
+      ["Display-name spoof","ชื่อโชว์ 'CEO Somchai' แต่อีเมลจริงเป็น gmail สุ่ม"],
+      ["Lookalike domain","company.com → cornpany.com / company-co.com"],
+      ["Reply-to mismatch","From เป็นภายใน แต่ Reply-To ชี้โดเมนนอก"],
+      ["Newly registered","โดเมนเพิ่งจดใหม่ (< 30 วัน) = สัญญาณเสี่ยง"],
+      ["Lookalike display","ใช้ตัวอักษร unicode คล้าย (homoglyph)"]
+    ]))}
+
+    ${scenario("พนักงานได้เมล 'CEO' ให้โอนเงินด่วน", "อีเมลนี้อาจ<b>ผ่าน SPF/DKIM/DMARC ทั้งหมด</b> เพราะส่งจาก gmail จริง (แค่ตั้งชื่อโชว์เป็น CEO) — auth จับไม่ได้! ต้องพึ่ง <b>impersonation protection</b> (จับ display-name spoof + VIP list) + <b>กระบวนการ out-of-band</b> (โทรยืนยันก่อนโอน) นี่คือเหตุผลที่ BEC อันตรายและต้องกันหลายชั้น")}
+
+    ${keypoints([
+      "เริ่มทุก policy ด้วย <b>monitor/audit mode</b> ก่อนเปิด enforce",
+      "Sandbox จับ payload จริง แต่โดน evasion ได้ — เสริม CDR + AI",
+      "URL rewriting ตรวจ <b>ตอนคลิก</b> กัน delayed weaponization",
+      "BEC มัก<b>ผ่าน auth</b> — ต้องใช้ impersonation protection + VIP list",
+      "ตั้งกระบวนการ <b>out-of-band verification</b> สำหรับการโอนเงิน"
+    ])}
     `
   },
   {
@@ -314,6 +436,26 @@ dig TXT spf.protection.outlook.com +short`)}
     ])}
 
     ${callout("warn","⚠️ TLS กันแค่ระหว่างทาง","TLS เข้ารหัสเฉพาะช่วง server-to-server — เมื่ออีเมลถึงที่เก็บ (at rest) จะเป็น plaintext ถ้าไม่มี S/MIME หรือ PGP สำหรับข้อมูลลับสูงต้องใช้ end-to-end encryption")}
+
+    ${deep("Opportunistic vs Forced (Mandatory) TLS", "<b>Opportunistic TLS:</b> ถ้าปลายทางรองรับก็เข้ารหัส ถ้าไม่รองรับก็<b>ส่งแบบ plaintext</b> (ดีกว่าส่งไม่ได้ แต่ไม่การันตี) — เป็นค่าเริ่มต้นทั่วไป<br><br><b>Forced/Mandatory TLS:</b> บังคับต้องเข้ารหัสเท่านั้น ถ้าปลายทางไม่รองรับ = <b>ไม่ส่ง (reject)</b> — ใช้กับคู่ค้าที่แลกข้อมูลลับ ตั้งเป็น connector เฉพาะโดเมน<br><br><b>MTA-STS:</b> มาตรฐานที่ประกาศผ่าน DNS ว่าโดเมนเราบังคับ TLS — กัน downgrade attack")}
+
+    ${deep("DLP: จับข้อมูลรั่วได้อย่างไร", defs([
+      ["Pattern/Regex","จับรูปแบบ เช่น เลขบัตร 16 หลัก, เลขบัตรประชาชน 13 หลัก"],
+      ["Dictionary","จับคำสำคัญ เช่น 'ลับ', 'confidential', ชื่อโครงการ"],
+      ["Fingerprint","แฮชเอกสารต้นฉบับ จับแม้ถูกก็อปบางส่วน"],
+      ["ML classifier","จำแนกเนื้อหาอ่อนไหวด้วย ML (เช่น งบการเงิน)"],
+      ["Exact Data Match","จับข้อมูลจริงจาก DB (เลขลูกค้าจริง)"]
+    ]))}
+
+    ${scenario("พนักงานเผลอส่งไฟล์ลูกค้าออกนอกองค์กร", "DLP policy จับ pattern (เลขบัตร/เลขประชาชน) ในไฟล์แนบ → action ตามที่ตั้ง: <b>block</b> (หยุดส่ง), <b>encrypt</b> (เข้ารหัสอัตโนมัติก่อนส่ง), <b>notify</b> (เตือน + ให้ manager approve), หรือ <b>quarantine</b> — เริ่มด้วย audit mode ดูว่า false positive เยอะไหมก่อนเปิด block จริง เพื่อไม่ให้ขวางงาน")}
+
+    ${keypoints([
+      "<b>TLS</b> = in transit เท่านั้น, at rest เป็น plaintext ถ้าไม่มี E2E",
+      "<b>Forced TLS</b> กับคู่ค้าสำคัญ + <b>MTA-STS</b> กัน downgrade",
+      "<b>S/MIME</b> เหมาะองค์กรมี PKI, <b>PGP</b> เหมาะกลุ่ม technical",
+      "DLP จับได้หลายวิธี: regex, dictionary, fingerprint, ML, EDM",
+      "เริ่ม DLP ด้วย <b>audit mode</b> ก่อนเปิด enforce กัน false positive"
+    ])}
     `
   },
   {
@@ -351,6 +493,28 @@ dig MX company.com +short                 <span class="cm"># MX</span>`)}
 
     ${callout("danger","❌ อย่าปิดระบบเก่าทันที (migration)","รันคู่ขนาน (coexistence) ระยะหนึ่ง — ยืนยันว่าระบบใหม่จับภัยได้ครบก่อน แล้วค่อยลด MX priority ของเก่า → ปิด → ลบ record")}
     ${callout("ok","🎉 จบหลักสูตร!","คุณครอบคลุมทุกขั้นของการ implement email security แล้ว — จากเลือกสถาปัตยกรรม → DNS auth → filtering → encryption → test & operate ลองทำ Quiz ท้ายบทเพื่อทดสอบความเข้าใจ")}
+
+    ${deep("SMTP diagnostic codes ที่ต้องรู้", defs([
+      ["250","สำเร็จ — เซิร์ฟเวอร์รับอีเมลแล้ว"],
+      ["421","เซิร์ฟเวอร์ไม่พร้อม/throttle — ลองใหม่ทีหลัง (temp)"],
+      ["450 / 451","temp fail — greylisting หรือ policy ชั่วคราว"],
+      ["550","ปฏิเสธถาวร — reputation, ไม่รู้จักผู้รับ, policy"],
+      ["5.7.1","authentication/policy fail — มัก SPF/DKIM/DMARC"],
+      ["5.7.26","DMARC fail — ไม่ผ่านการยืนยันตัวตน"]
+    ]))}
+
+    ${deep("SIEM/XDR integration — ต่อยอด monitoring", "ส่ง log จาก email security เข้า <b>SIEM/XDR</b> เพื่อ correlate ข้ามชั้น (email → endpoint → identity → network) — เมื่อคนคลิก phishing ระบบเห็นทั้ง chain: อีเมลเข้า → คลิกลิงก์ → endpoint โหลด payload → บัญชีถูกใช้ผิดปกติ ทำให้ตอบสนองอัตโนมัติผ่าน playbook ได้ (เช่น auto-quarantine + isolate endpoint + reset credential พร้อมกัน)")}
+
+    ${scenario("ได้ report phishing จากผู้ใช้ 1 ราย", "Runbook: <b>(1)</b> ดึงต้นฉบับ (Forward as Attachment เก็บ header ครบ) <b>(2)</b> สกัด IOC — sender IP, domain, URL, file hash <b>(3)</b> ค้นทั้ง tenant ว่าใครได้อีเมลนี้อีกบ้าง <b>(4)</b> quarantine/ลบจากทุกกล่องพร้อมกัน <b>(5)</b> block IOC ที่ gateway + endpoint <b>(6)</b> ถ้ามีคนคลิก/กรอกรหัส → reset credential + ตรวจ sign-in log")}
+
+    ${keypoints([
+      "เทสต์ครบก่อน go-live: SPF (≤10 lookup), DKIM verify, DMARC alignment",
+      "SMTP code บอกสาเหตุ: <code>550</code>=reject, <code>5.7.1/5.7.26</code>=auth/DMARC fail",
+      "อ่าน DMARC report ประจำ + monitor false-positive/quarantine rate",
+      "Runbook IR: Identify → Contain → Eradicate → Recover",
+      "ต่อ SIEM/XDR เพื่อ correlate email↔endpoint↔identity + auto-response",
+      "Migration: รันคู่ขนานก่อน แล้วค่อยลด MX priority ของเก่า → ปิด"
+    ])}
 
     <h3 class="text-xl font-bold mb-4 mt-8">🎓 Quiz ท้ายบท</h3>
     ${quizBlock()}
@@ -467,7 +631,10 @@ function quizBlock(){
     {q:"สถาปัตยกรรมใดไม่ต้องแก้ MX record ในการ deploy?",o:["SEG (Inline)","API-based (ICES)","ทั้งสองแบบต้องแก้"],a:1,e:"API-based (ICES) ต่อผ่าน API เข้า mailbox โดยตรง จึงไม่ต้องแก้ MX record"},
     {q:"SPF ทำ DNS lookup ได้สูงสุดกี่ครั้ง?",o:["5","10","ไม่จำกัด"],a:1,e:"SPF จำกัดที่ 10 lookups — เกินแล้วเกิด permerror และ fail ทั้งหมด"},
     {q:"ควรเริ่ม rollout DMARC ด้วยนโยบายใด?",o:["p=reject ทันที","p=quarantine","p=none"],a:2,e:"เริ่ม p=none เพื่อเก็บ report และ inventory ผู้ส่งก่อน แล้วค่อยไล่เข้ม"},
-    {q:"TLS ป้องกันข้อมูลในช่วงใด?",o:["ตอนเก็บใน mailbox","ระหว่างเซิร์ฟเวอร์ (in transit)","end-to-end"],a:1,e:"TLS เข้ารหัสเฉพาะ in transit — ถึงที่เก็บเป็น plaintext ถ้าไม่มี S/MIME/PGP"}
+    {q:"TLS ป้องกันข้อมูลในช่วงใด?",o:["ตอนเก็บใน mailbox","ระหว่างเซิร์ฟเวอร์ (in transit)","end-to-end"],a:1,e:"TLS เข้ารหัสเฉพาะ in transit — ถึงที่เก็บเป็น plaintext ถ้าไม่มี S/MIME/PGP"},
+    {q:"ทำไม DKIM ถึง 'รอด' การ forward แต่ SPF ไม่รอด?",o:["DKIM เร็วกว่า","DKIM เซ็นติดไปกับอีเมล ไม่ขึ้นกับ IP","SPF ไม่เข้ารหัส"],a:1,e:"DKIM เซ็นติดไปกับตัวอีเมล จึงไม่ขึ้นกับ IP ที่ส่ง — ต่างจาก SPF ที่ fail เมื่อ IP เปลี่ยนตอน forward"},
+    {q:"BEC ที่ส่งจาก Gmail จริง (ตั้งชื่อโชว์เป็น CEO) จะถูกจับด้วยอะไร?",o:["SPF/DKIM/DMARC","Impersonation protection + VIP list","TLS"],a:1,e:"BEC แบบนี้มักผ่าน auth ทั้งหมดเพราะส่งจากบัญชีจริง — ต้องพึ่ง impersonation protection และกระบวนการ out-of-band verification"},
+    {q:"URL rewriting / time-of-click ตรวจลิงก์เมื่อใด?",o:["ตอนอีเมลมาถึง","ตอนที่ผู้ใช้คลิก","ตอน compose"],a:1,e:"ตรวจ ณ วินาทีที่คลิก เพื่อกัน delayed weaponization (ลิงก์สะอาดตอนส่ง แล้วค่อยเปลี่ยนเป็นอันตราย)"}
   ];
   return `<div class="space-y-4">${qs.map((it,qi)=>`
     <div class="bg-white rounded-2xl border border-slate-100 p-5">
@@ -478,6 +645,36 @@ function quizBlock(){
       </div>
       <div id="qe${qi}" class="hidden mt-3 text-sm rounded-xl p-3"></div>
     </div>`).join("")}</div>`;
+}
+
+// ---- deep-dive expandable section ----
+function deep(title, inner){
+  return `<details class="group my-4 bg-white rounded-2xl border border-slate-100 overflow-hidden">
+    <summary class="flex items-center justify-between gap-3 px-5 py-4 cursor-pointer font-semibold text-slate-700 hover:bg-indigo-50/50 transition list-none">
+      <span class="flex items-center gap-2"><span class="text-indigo-500">🔎</span> ${title}</span>
+      <svg class="w-5 h-5 text-indigo-400 transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5"/></svg>
+    </summary>
+    <div class="px-5 pb-5 pt-1 text-sm text-slate-600 leading-relaxed border-t border-slate-50">${inner}</div>
+  </details>`;
+}
+// ---- key points summary box ----
+function keypoints(items){
+  return `<div class="my-5 rounded-2xl p-5 bg-gradient-to-br from-indigo-50 to-purple-50 border border-indigo-100">
+    <p class="font-bold text-indigo-700 mb-3 text-sm flex items-center gap-2">🎯 ประเด็นสำคัญที่ต้องจำ</p>
+    <ul class="space-y-2">${items.map(t=>`<li class="flex items-start gap-2 text-sm text-slate-700"><span class="text-indigo-500 mt-0.5">▸</span><span>${t}</span></li>`).join("")}</ul>
+  </div>`;
+}
+// ---- definition / glossary list ----
+function defs(rows){
+  return `<div class="my-4 space-y-2">${rows.map(r=>`<div class="flex gap-3 bg-white rounded-xl border border-slate-100 p-3">
+    <span class="shrink-0 font-mono text-xs font-bold text-purple-600 bg-purple-50 rounded-md px-2 py-1 h-fit">${r[0]}</span>
+    <span class="text-sm text-slate-600 leading-relaxed">${r[1]}</span></div>`).join("")}</div>`;
+}
+// ---- real-world scenario box ----
+function scenario(title, inner){
+  return `<div class="my-4 rounded-2xl border-2 border-purple-200 bg-purple-50/40 p-5">
+    <p class="font-bold text-purple-700 mb-2 text-sm flex items-center gap-2">🎬 สถานการณ์จริง — ${title}</p>
+    <div class="text-sm text-slate-700 leading-relaxed">${inner}</div></div>`;
 }
 
 // ============ APP LOGIC ============
@@ -543,7 +740,10 @@ function quizPick(qi,oi,ans){
     "API-based (ICES) ต่อผ่าน API เข้า mailbox โดยตรง จึงไม่ต้องแก้ MX record",
     "SPF จำกัดที่ 10 lookups — เกินแล้วเกิด permerror และ fail ทั้งหมด",
     "เริ่ม p=none เพื่อเก็บ report และ inventory ผู้ส่งก่อน แล้วค่อยไล่เข้ม",
-    "TLS เข้ารหัสเฉพาะ in transit — ถึงที่เก็บเป็น plaintext ถ้าไม่มี S/MIME/PGP"
+    "TLS เข้ารหัสเฉพาะ in transit — ถึงที่เก็บเป็น plaintext ถ้าไม่มี S/MIME/PGP",
+    "DKIM เซ็นติดไปกับตัวอีเมล จึงไม่ขึ้นกับ IP ที่ส่ง — ต่างจาก SPF ที่ fail เมื่อ IP เปลี่ยนตอน forward",
+    "BEC แบบนี้มักผ่าน auth ทั้งหมดเพราะส่งจากบัญชีจริง — ต้องพึ่ง impersonation protection และกระบวนการ out-of-band verification",
+    "ตรวจ ณ วินาทีที่คลิก เพื่อกัน delayed weaponization (ลิงก์สะอาดตอนส่ง แล้วค่อยเปลี่ยนเป็นอันตราย)"
   ];
   const e=document.getElementById("qe"+qi);
   const correct = oi===ans;
